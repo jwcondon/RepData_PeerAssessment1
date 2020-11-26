@@ -1,25 +1,139 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
+title: 'Reproducible Research: Peer Assessment 1 - Jim Condon'
+output:
   html_document:
-    keep_md: true
+    keep_md: yes
+  pdf_document: default
 ---
 
+## Lead Libraries
+```{r libraries}
+library(tidyr)
+library(plyr)
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+```
 
 ## Loading and preprocessing the data
-
+```{r load data}
+activity_data <- read.csv("activity.csv")
+```
 
 
 ## What is mean total number of steps taken per day?
 
+We do a quick analysis of the data by creating a histogram of the steps each day.  
+First we aggregate the data by date (removing na), then create the histogram.
 
+```{r histogram}
+activity_data_without_na <- activity_data[complete.cases(activity_data),]
+agg_data <- aggregate(activity_data_without_na$steps, list(date = activity_data_without_na$date), sum)
+hist(agg_data$x)
+```
+
+Now we calculate the mean and median of the total steps per day.
+
+```{r mean}
+activity_mean <- mean(agg_data$x)
+activity_mean
+```
+```{r median}
+activity_median <- median(agg_data$x)
+activity_median
+```
 
 ## What is the average daily activity pattern?
 
+First average (mean) data by interval across all days.
+```{r average steps per interval}
+avg_data <- aggregate(activity_data_without_na$steps, list(interval = activity_data_without_na$interval), mean)
+```
 
+Then plot the data in a time series.
+```{r time series}
+plot(avg_data$interval, avg_data$x, type = "l")
+```
+
+Which interval has the highest number of steps on average?
+```{r max}
+max(avg_data$x)
+```
 
 ## Imputing missing values
 
+Calculate the number of rows with NAs.
+```{r NA rows}
+nrow(activity_data[!complete.cases(activity_data),])
+```
+
+Now we replace all the NA values with the mean for that interval.  First we create a new data frame with the mean for each interval in a new column.
+
+```{r activity with averages}
+activity_data_with_avg <- merge(activity_data, avg_data, by = "interval")
+```
+
+Then we replace all NA values in steps with the mean for that interval.
+
+```{r replace NAs}
+activity_data_with_avg[is.na(activity_data_with_avg$steps),]$steps <- activity_data_with_avg[is.na(activity_data_with_avg$steps),]$x
+```
+
+Create histogram and calculate mean/median as earlier to compare.
+
+```{r histogram cleaned data}
+agg_data_cleaned <- aggregate(activity_data_with_avg$steps, list(date = activity_data_with_avg$date), sum)
+hist(agg_data_cleaned$x)
+```
+
+Now we calculate the mean and median of the total steps per day.
+
+```{r mean cleaned data}
+activity_mean <- mean(agg_data_cleaned$x)
+activity_mean
+```
+```{r median cleaned data}
+activity_median <- median(agg_data_cleaned$x)
+activity_median
+```
+
+The histogram and mean did not change, but the median changed slightly.  I think the impact that replacing values has on the dataset would depend on the choice for replacement.  As I chose the mean of each interval, the data was very similar to other values of that interval, therefore the larger dataset wasn't affected as much.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+## need to create new datasets with replaced NAs based on avg_data then subset for weekday/weekend
+
+We create a new variable called weekday that lists the weekday of the date in our data that has replaced NA values.
+
+```{r add weekday}
+activity_data_with_avg$weekday <- weekdays(as.Date(activity_data_with_avg$date))
+```
+
+Then we subset our data into 2 separate datasets one for weekends and one for weekdays.
+
+```{r weekday interval values}
+activity_data_with_avg_weekday <- subset(activity_data_with_avg, weekday != "Saturday" & weekday != "Sunday")
+```
+
+```{r weekend interval values}
+activity_data_with_avg_weekend <- subset(activity_data_with_avg, weekday == "Saturday" | weekday == "Sunday")
+```
+
+Then we aggregate the data by interval.
+
+```{r interval aggregate weekday}
+agg_interval_data_weekday <- aggregate(activity_data_with_avg_weekday$steps, list(interval = activity_data_with_avg_weekday$interval), mean)
+```
+
+```{r interval aggregate weekend}
+agg_interval_data_weekend <- aggregate(activity_data_with_avg_weekend$steps, list(interval = activity_data_with_avg_weekend$interval), mean)
+```
+
+Now we plot both graphs.
+
+```{r panel plot}
+weekend <- ggplot(data = agg_interval_data_weekend, aes(x = interval, y = x)) + geom_line() + ggtitle("weekend") + theme(plot.title = element_text(hjust = 0.5)) + labs(y = "Number of Steps") + ylim(c(0, 250))
+weekday <- ggplot(data = agg_interval_data_weekday, aes(x = interval, y = x)) + geom_line() + ggtitle("weekday") + theme(plot.title = element_text(hjust = 0.5)) + labs(y = "Number of Steps") + ylim(c(0, 250))
+grid.arrange(arrangeGrob(weekend, weekday, nrow = 2))
+```
